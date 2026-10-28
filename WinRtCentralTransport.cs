@@ -34,6 +34,7 @@ public sealed class WinRtCentralTransport : IBleTransport
     {
         public required BlePeer Peer;
         public required BluetoothLEDevice Device;
+        public GattSession? GattSession;
         public GattCharacteristic? Tx;
         public GattCharacteristic? Rx;
         public GattCharacteristic? Identity;
@@ -94,6 +95,21 @@ public sealed class WinRtCentralTransport : IBleTransport
 
     public async Task<bool> ConnectAsync(BlePeer peer)
     {
+        // Clean up any prior connection object for this address so we don't reuse
+        // a stale BluetoothLEDevice / GATT cache (root cause of "missing TX/RX"
+        // on reconnect).
+        lock (_lock)
+        {
+            if (_connections.TryGetValue(peer.BluetoothAddress, out var old))
+            {
+                _connections.Remove(peer.BluetoothAddress);
+                old.Keepalive?.Dispose();
+                try { old.Device.Dispose(); } catch { }
+            }
+        }
+        // Give Windows a moment to release the old handles.
+        await Task.Delay(200);
+
         var device = await BluetoothLEDevice.FromBluetoothAddressAsync(peer.BluetoothAddress);
         if (device == null)
         {
@@ -101,37 +117,50 @@ public sealed class WinRtCentralTransport : IBleTransport
             return false;
         }
 
-        // Force an UNCACHED service read. Windows aggressively caches GATT
-        // services; after a disconnect the cache can return stale/empty handles,
-        // which showed up as "missing TX/RX" on reconnect. Uncached + a short
-        // retry makes reconnect reliable.
-        GattDeviceServicesResult? servicesResult = null;
-        for (int attempt = 0; attempt < 3; attempt++)
+        // Hold the GATT session open with MaintainConnection so the link is
+        // actually established before we enumerate services/characteristics.
+        GattSession? gattSession = null;
+        try
         {
-            servicesResult = await device.GetGattServicesForUuidAsync(
+            gattSession = await GattSession.FromDeviceIdAsync(device.BluetoothDeviceId);
+            gattSession.MaintainConnection = true;
+        }
+        catch { /* older stacks: proceed without explicit session */ }
+
+        // Resolve the service + TX/RX with retries, UNCACHED, allowing the GATT
+        // connection time to come up.
+        GattDeviceService? service = null;
+        GattCharacteristic? tx = null, rx = null, identity = null, capability = null;
+
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            var servicesResult = await device.GetGattServicesForUuidAsync(
                 Protocol.ServiceUuid, BluetoothCacheMode.Uncached);
             if (servicesResult.Status == GattCommunicationStatus.Success &&
                 servicesResult.Services.Count > 0)
-                break;
-            await Task.Delay(300);
+            {
+                service = servicesResult.Services[0];
+                tx = await ResolveChar(service, Protocol.TxCharUuid);
+                rx = await ResolveChar(service, Protocol.RxCharUuid);
+                identity = await ResolveChar(service, Protocol.IdentityCharUuid);
+                capability = await ResolveChar(service, Protocol.CapabilityCharUuid);
+                if (tx != null && rx != null) break; // success
+            }
+            Console.WriteLine($"[connect] attempt {attempt + 1}: service/char not ready, retrying…");
+            await Task.Delay(500);
         }
 
-        if (servicesResult == null ||
-            servicesResult.Status != GattCommunicationStatus.Success ||
-            servicesResult.Services.Count == 0)
+        if (service == null || tx == null || rx == null)
         {
-            Console.WriteLine($"[connect] service not found: {servicesResult?.Status}");
+            Console.WriteLine("[connect] missing TX/RX characteristic after retries — aborting");
+            gattSession?.Dispose();
             device.Dispose();
             return false;
         }
 
-        var service = servicesResult.Services[0];
         var conn = new Connection { Peer = peer, Device = device };
-
-        conn.Tx = await ResolveChar(service, Protocol.TxCharUuid);
-        conn.Rx = await ResolveChar(service, Protocol.RxCharUuid);
-        conn.Identity = await ResolveChar(service, Protocol.IdentityCharUuid);
-        conn.Capability = await ResolveChar(service, Protocol.CapabilityCharUuid);
+        conn.Tx = tx; conn.Rx = rx; conn.Identity = identity; conn.Capability = capability;
+        conn.GattSession = gattSession;
 
         if (conn.Tx == null || conn.Rx == null)
         {
@@ -263,6 +292,7 @@ public sealed class WinRtCentralTransport : IBleTransport
             if (!_connections.Remove(conn.Peer.BluetoothAddress)) return;
         }
         conn.Keepalive?.Dispose();
+        try { conn.GattSession?.Dispose(); } catch { /* noop */ }
         try { conn.Device.Dispose(); } catch { /* noop */ }
         Console.WriteLine($"[disconnect] {conn.Peer.AddressString} ({reason})");
         PeerDisconnected?.Invoke(conn.Peer);

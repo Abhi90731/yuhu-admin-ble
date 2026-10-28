@@ -42,8 +42,11 @@ public static class Protocol
     };
 
     // ---- Keepalive timing (TRANSPORT-BLE.md §7) ----
+    // NOTE: our central is more lenient than the 6s spec default — real-world
+    // Windows BLE + phone round-trips can lag, and an over-eager timeout was
+    // dropping links mid-handshake. 15s tolerance, 2s ping.
     public const int KeepaliveIntervalMs = 2000;
-    public const int LinkTimeoutMs = 6000;
+    public const int LinkTimeoutMs = 15000;
 
     /// <summary>
     /// Derive the 16-hex logical id from an advertisement "&lt;base64 pubkey&gt;|&lt;name&gt;"
