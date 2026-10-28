@@ -45,6 +45,31 @@ public sealed class AdminClient
         _send = send;
     }
 
+    private Timer? _keepalive;
+
+    /// <summary>
+    /// Start a periodic admin-level PING so the direct link stays alive between
+    /// log activity (the phone's keepalive timeout is ~6s; we PING well inside
+    /// that). Stops automatically on Dispose/StopKeepalive.
+    /// </summary>
+    private void StartKeepalive()
+    {
+        _keepalive?.Dispose();
+        _keepalive = new Timer(_ =>
+        {
+            if (Current == State.Authed)
+            {
+                try { Ping(); } catch { /* link may be gone; ignore */ }
+            }
+        }, null, 2000, 2000);
+    }
+
+    public void StopKeepalive()
+    {
+        _keepalive?.Dispose();
+        _keepalive = null;
+    }
+
     /// <summary>Kick off the handshake by sending ADMIN_HELLO with the cert.</summary>
     public void Start()
     {
@@ -73,6 +98,7 @@ public sealed class AdminClient
                 break;
             case "ADMIN_OK":
                 Current = State.Authed;
+                StartKeepalive();   // keep the direct link alive from here on
                 Authenticated?.Invoke();
                 break;
             case "LOG":
@@ -118,12 +144,20 @@ public sealed class AdminClient
         Failed_?.Invoke(reason);
     }
 
-    // ---- post-auth commands ----
+    // ---- post-auth commands (3-tier) ----
 
-    public void RequestLogTail(string? tag = null, int lines = 200)
+    /// <summary>STATE tier: curated major issues/failures.</summary>
+    public void RequestState()
     {
         RequireAuth();
-        var req = new Dictionary<string, object> { ["t"] = "LOG_TAIL", ["lines"] = lines };
+        _send(JsonSerializer.Serialize(new Dictionary<string, object> { ["t"] = "LOG_STATE" }));
+    }
+
+    /// <summary>DETAIL tier: all mesh tags within the last [windowMin] minutes (1/5/20).</summary>
+    public void RequestDetail(int windowMin = 5, string? tag = null)
+    {
+        RequireAuth();
+        var req = new Dictionary<string, object> { ["t"] = "LOG_DETAIL", ["window"] = windowMin };
         if (tag != null) req["tag"] = tag;
         _send(JsonSerializer.Serialize(req));
     }

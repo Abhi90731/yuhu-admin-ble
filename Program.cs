@@ -66,7 +66,7 @@ bool StartAuth(BlePeer peer)
     if (string.IsNullOrEmpty(phoneId)) { Console.WriteLine("[admin] unknown phone logical id; cannot bind proof"); return false; }
 
     admin = new AdminClient(identity, phoneId, json => _ = transport.SendAdminAsync(peer, json));
-    admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (type 'logs' or 'live')\n");
+    admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (type 'state', 'detail [min]', or 'live')\n");
     admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
     admin.LogBatch += lines =>
     {
@@ -92,11 +92,11 @@ transport.PeerConnected += peer =>
 
 await transport.StartScanAsync();
 Console.WriteLine("Scanning… commands:");
-Console.WriteLine("  <number>      connect to device by index");
+Console.WriteLine("  <number>      connect to device by index (auto-authenticates)");
 Console.WriteLine("  r             rescan list");
-Console.WriteLine("  auth          run admin handshake on the connected peer");
-Console.WriteLine("  logs [tag]    request a log tail (optionally filter by tag, e.g. MeshFlow)");
-Console.WriteLine("  live / stop   start / stop live log streaming");
+Console.WriteLine("  state         pull STATE logs (major issues / failures)");
+Console.WriteLine("  detail [min]  pull DETAIL logs for last min minutes (1/5/20, default 5)");
+Console.WriteLine("  live / stop   start / stop continuous live streaming");
 Console.WriteLine("  q             quit\n");
 
 while (true)
@@ -121,12 +121,18 @@ while (true)
         StartAuth(adminPeer);
         continue;
     }
-    if (line.StartsWith("logs"))
+    if (line is "state")
     {
-        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated (run auth)"); continue; }
+        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated"); continue; }
+        admin.RequestState();
+        continue;
+    }
+    if (line.StartsWith("detail"))
+    {
+        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated"); continue; }
         var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-        var tag = parts.Length > 1 ? parts[1] : null;
-        admin.RequestLogTail(tag, 200);
+        int win = (parts.Length > 1 && int.TryParse(parts[1], out var m)) ? m : 5;
+        admin.RequestDetail(win);
         continue;
     }
     if (line is "live")
