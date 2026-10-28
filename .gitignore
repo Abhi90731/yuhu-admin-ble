@@ -3,3 +3,14 @@ obj/
 *.user
 .vs/
 .DS_Store
+
+# ---- NEVER commit key material or certs (offline/secret) ----
+*.key
+*-cert.json
+admin-cert.json
+root-private.key
+root-public.key
+admin-private.key
+admin-public.key
+tools/node_modules/
+.yuhu-secrets/

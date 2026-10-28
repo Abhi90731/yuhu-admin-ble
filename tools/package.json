@@ -1,0 +1,7 @@
+{
+  "name": "yuhu-admin-ble-tools",
+  "version": "0.1.0",
+  "description": "Offline tooling: root keypair generation + admin certificate minting for the YUHU admin trust model.",
+  "type": "module",
+  "private": true
+}
