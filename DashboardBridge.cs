@@ -51,7 +51,13 @@ public sealed class DashboardBridge
         _transport.PeerConnected += OnPeerConnected;
         _transport.PeerDisconnected += _ => Broadcast(new { ev = "disconnected" });
         _transport.AdminReceived += (_, json) => _admin?.OnEnvelope(json);
+
+        // Periodically re-broadcast so stale (rotated-away) addresses expire from
+        // the UI even when no new discovery events arrive.
+        _peerRefresh = new Timer(_ => BroadcastPeers(), null, 5000, 5000);
     }
+
+    private readonly Timer _peerRefresh;
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -165,7 +171,28 @@ public sealed class DashboardBridge
 
     private void BroadcastPeers()
     {
-        var peers = _peers.Values
+        var now = DateTimeOffset.UtcNow;
+        const int staleMs = 12000; // drop devices not seen recently (addresses rotate)
+
+        // Expire stale entries so rotated-away addresses don't pile up.
+        foreach (var kv in _peers)
+        {
+            if ((now - kv.Value.LastSeen).TotalMilliseconds > staleMs)
+                _peers.TryRemove(kv.Key, out _);
+        }
+
+        // Dedupe: prefer the stable logical id when known; else fall back to the
+        // (rotating) address. A phone that has revealed its id collapses to one
+        // entry even across address rotations.
+        var deduped = new Dictionary<string, BlePeer>();
+        foreach (var p in _peers.Values)
+        {
+            var key = !string.IsNullOrEmpty(p.LogicalId) ? "id:" + p.LogicalId : "addr:" + p.AddressString;
+            if (!deduped.TryGetValue(key, out var existing) || p.LastSeen > existing.LastSeen)
+                deduped[key] = p;
+        }
+
+        var peers = deduped.Values
             .OrderByDescending(p => p.Rssi)
             .Select(p => new { addr = p.AddressString, name = p.AdvertisedName, id = p.LogicalId, rssi = (int)p.Rssi })
             .ToList();
