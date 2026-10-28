@@ -15,4 +15,14 @@
     <RootNamespace>YuhuAdminBle</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    The test project lives in ./tests with its own .csproj. Exclude it here so
+    the app doesn't try to compile the Xunit-based test sources (which would
+    fail — the app doesn't reference Xunit). The tests build/run on their own
+    via `dotnet test` inside the tests folder.
+  -->
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+  </ItemGroup>
+
 </Project>
