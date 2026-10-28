@@ -86,7 +86,12 @@ bool StartAuth(BlePeer peer)
     if (string.IsNullOrEmpty(phoneId)) { Console.WriteLine("[admin] unknown phone logical id; cannot bind proof"); return false; }
 
     admin = new AdminClient(identity, phoneId, json => _ = transport.SendAdminAsync(peer, json));
-    admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (state | detail [min] | exc | live | sys)\n");
+    admin.Authenticated += () =>
+    {
+        Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (state | detail [min] | exc | live | sys)\n");
+        // Auto-pull recent logs on connect.
+        try { admin!.RequestState(); admin!.RequestDetail(5); } catch { }
+    };
     admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
     admin.LogBatch += lines =>
     {

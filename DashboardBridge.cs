@@ -170,7 +170,18 @@ public sealed class DashboardBridge
         }
 
         _admin = new AdminClient(_identity, peer.LogicalId!, j => _ = _transport.SendAdminAsync(peer, j));
-        _admin.Authenticated += () => Broadcast(new { ev = "auth" });
+        _admin.Authenticated += () =>
+        {
+            Broadcast(new { ev = "auth" });
+            // Auto-pull on connect so the UI shows content immediately instead of
+            // a blank panel: recent state (failures) + the last 5 min of detail.
+            // Staggered slightly so the two chunked requests don't interleave.
+            _ = Task.Run(async () =>
+            {
+                try { _admin!.RequestState(); await Task.Delay(400); _admin!.RequestDetail(5); }
+                catch { /* link may have dropped */ }
+            });
+        };
         _admin.Failed_ += r => Broadcast(new { ev = "status", text = $"auth failed: {r}" });
         _admin.LogBatch += lines => Broadcast(new { ev = "log", tier = "batch", lines });
         _admin.LiveLine += line => Broadcast(new { ev = "live", line });
