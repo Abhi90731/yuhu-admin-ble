@@ -1,5 +1,25 @@
 using YuhuAdminBle;
 
+// Two modes:
+//   (default)   interactive console spike/driver
+//   --bridge    headless sidecar: exposes the BLE admin over a local WebSocket
+//               for the dashboard UI (no console typing).
+
+if (args.Contains("--bridge"))
+{
+    Console.WriteLine("YUHU Admin BLE — dashboard bridge (sidecar) mode");
+    AdminIdentity? bridgeIdentity = null;
+    try { bridgeIdentity = AdminIdentity.Load(Path.Combine(AppContext.BaseDirectory, "admin-identity")); Console.WriteLine("[admin] identity loaded; cert present."); }
+    catch (FileNotFoundException ex) { Console.WriteLine("[admin] " + ex.Message); }
+
+    await using var bridgeTransport = new WinRtCentralTransport();
+    var bridge = new DashboardBridge(bridgeTransport, bridgeIdentity, port: 4318);
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+    await bridge.RunAsync(cts.Token);
+    return;
+}
+
 // A.3.0 spike driver.
 //
 // Scans for YUHU devices (frozen Service UUID), lists them with RSSI/name, then
