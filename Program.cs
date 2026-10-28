@@ -38,8 +38,33 @@ transport.MessageReceived += (peer, data) =>
     Console.WriteLine($"[msg] {peer.AddressString} ({data.Length} bytes): " +
                       System.Text.Encoding.UTF8.GetString(data));
 
+// ---- A.3 admin wiring ----
+// Load the admin identity (DPAPI key + root-signed cert) from ./admin-identity.
+AdminIdentity? identity = null;
+try
+{
+    identity = AdminIdentity.Load(Path.Combine(AppContext.BaseDirectory, "admin-identity"));
+    Console.WriteLine("[admin] identity loaded; cert present.");
+}
+catch (FileNotFoundException ex)
+{
+    Console.WriteLine("[admin] " + ex.Message);
+    Console.WriteLine("[admin] admin commands disabled until a cert is placed.");
+}
+
+AdminClient? admin = null;
+BlePeer? adminPeer = null;
+
+transport.AdminReceived += (peer, json) => admin?.OnEnvelope(json);
+
 await transport.StartScanAsync();
-Console.WriteLine("Scanning… commands: <number> connect | r rescan list | q quit\n");
+Console.WriteLine("Scanning… commands:");
+Console.WriteLine("  <number>      connect to device by index");
+Console.WriteLine("  r             rescan list");
+Console.WriteLine("  auth          run admin handshake on the connected peer");
+Console.WriteLine("  logs [tag]    request a log tail (optionally filter by tag, e.g. MeshFlow)");
+Console.WriteLine("  live / stop   start / stop live log streaming");
+Console.WriteLine("  q             quit\n");
 
 while (true)
 {
@@ -57,11 +82,53 @@ while (true)
         }
         continue;
     }
+    if (line.StartsWith("auth"))
+    {
+        if (identity == null) { Console.WriteLine("[admin] no identity/cert loaded"); continue; }
+        if (adminPeer == null) { Console.WriteLine("[admin] connect to a peer first"); continue; }
+        var phoneId = adminPeer.LogicalId; // derived from the Identity read on connect
+        if (string.IsNullOrEmpty(phoneId)) { Console.WriteLine("[admin] unknown phone logical id (identity read failed); cannot bind proof"); continue; }
+
+        admin = new AdminClient(identity, phoneId, json => _ = transport.SendAdminAsync(adminPeer!, json));
+        admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED\n");
+        admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
+        admin.LogBatch += lines =>
+        {
+            Console.WriteLine($"--- LOG ({lines.Count} lines) ---");
+            foreach (var l in lines) Console.WriteLine("  " + l);
+        };
+        admin.LiveLine += l => Console.WriteLine("[live] " + l);
+        admin.Start();
+        Console.WriteLine("[admin] ADMIN_HELLO sent…");
+        continue;
+    }
+    if (line.StartsWith("logs"))
+    {
+        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated (run auth)"); continue; }
+        var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var tag = parts.Length > 1 ? parts[1] : null;
+        admin.RequestLogTail(tag, 200);
+        continue;
+    }
+    if (line is "live")
+    {
+        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated"); continue; }
+        admin.SetLiveLogs(true);
+        Console.WriteLine("[admin] live streaming ON");
+        continue;
+    }
+    if (line is "stop")
+    {
+        admin?.SetLiveLogs(false);
+        Console.WriteLine("[admin] live streaming OFF");
+        continue;
+    }
     if (int.TryParse(line, out var idx) && idx >= 0 && idx < discovered.Count)
     {
         Console.WriteLine($"[connect] attempting {discovered[idx].AddressString}…");
         var ok = await transport.ConnectAsync(discovered[idx]);
-        if (!ok) Console.WriteLine("[connect] failed");
+        if (ok) adminPeer = discovered[idx];
+        else Console.WriteLine("[connect] failed");
         continue;
     }
     Console.WriteLine("?? unknown command");

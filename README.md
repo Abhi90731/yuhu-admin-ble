@@ -67,6 +67,37 @@ If all four hold, Windows BLE central works against a real phone and we proceed
 to full A.3 (admin challenge + direct-peer log streaming). If it fails, we learn
 the exact Windows constraint cheaply.
 
+## A.3 — Admin direct-peer logs (authenticated)
+
+Once the spike connects, the admin workflow adds authenticated log access:
+
+### One-time setup (per admin laptop)
+1. Run the app once; it generates an admin keypair in `admin-identity/admin-key.dpapi`
+   (DPAPI-encrypted, bound to your Windows user) and prints the admin PUBLIC key.
+2. Offline, mint a root-signed cert for that public key:
+   ```bash
+   node tools/mint-admin-cert.js --rootPriv /offline/root-private.key \
+     --adminPub <printed admin public key> --label admin-laptop-1 --days 365 \
+     --out admin-identity/admin-cert.json
+   ```
+3. Re-run the app; it loads the cert.
+
+### Using it
+With a phone built with `admin.enabled=true` and `transport.impl=ble`:
+```
+<index>      connect to the phone
+auth         run the admin handshake (HELLO -> CHALLENGE -> PROOF -> OK)
+logs         pull a log tail
+logs MeshFlow  pull a tail filtered to the MeshFlow tag
+live         start live log streaming
+stop         stop live streaming
+```
+
+A successful `auth` prints `>>> ADMIN AUTHENTICATED`. `logs` then returns the
+phone's recent log lines over the direct BLE link — no cable. The phone only
+honors this if its cert verifies AND `admin.enabled` is on; otherwise it drops
+the admin frames.
+
 ## Tests (cross-platform, run anywhere)
 
 The framing logic is pure .NET (no WinRT) and verifies the interop **golden

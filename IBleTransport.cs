@@ -42,6 +42,9 @@ public interface IBleTransport : IAsyncDisposable
     /// <summary>Fired with a fully reassembled inbound message (DATA frames).</summary>
     event Action<BlePeer, byte[]>? MessageReceived;
 
+    /// <summary>Fired with a reassembled inbound ADMIN envelope (0x03 frames), UTF-8 JSON.</summary>
+    event Action<BlePeer, string>? AdminReceived;
+
     /// <summary>Begin scanning for YUHU devices (by frozen Service UUID).</summary>
     Task StartScanAsync();
 
@@ -53,4 +56,7 @@ public interface IBleTransport : IAsyncDisposable
 
     /// <summary>Send raw bytes to a connected peer (framed + chunked).</summary>
     Task SendAsync(BlePeer peer, byte[] data);
+
+    /// <summary>Send an admin JSON envelope to a connected peer (0x03 frames).</summary>
+    Task SendAdminAsync(BlePeer peer, string json);
 }

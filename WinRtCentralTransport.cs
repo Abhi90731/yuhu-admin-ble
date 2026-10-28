@@ -28,6 +28,7 @@ public sealed class WinRtCentralTransport : IBleTransport
     public event Action<BlePeer>? PeerConnected;
     public event Action<BlePeer>? PeerDisconnected;
     public event Action<BlePeer, byte[]>? MessageReceived;
+    public event Action<BlePeer, string>? AdminReceived;
 
     private sealed class Connection
     {
@@ -137,6 +138,11 @@ public sealed class WinRtCentralTransport : IBleTransport
             {
                 var idStr = System.Text.Encoding.UTF8.GetString(ReadBuffer(idRead.Value));
                 Console.WriteLine($"[identity] {idStr}");
+                // Derive the phone's logical id (TRANSPORT-BLE §3.3) from its
+                // "<base64 pubkey>|<name>" so the admin proof can bind to it.
+                peer.LogicalId = Protocol.LogicalIdFromAdvertisement(idStr) ?? peer.LogicalId;
+                var name = idStr.Contains('|') ? idStr[(idStr.IndexOf('|') + 1)..] : null;
+                if (!string.IsNullOrEmpty(name)) peer.AdvertisedName = name;
             }
         }
 
@@ -172,7 +178,11 @@ public sealed class WinRtCentralTransport : IBleTransport
         {
             var (frameType, message) = conn.Reassembler.Accept(frame);
             if (frameType == Protocol.FrameTypePing) return; // liveness only
-            if (message != null) MessageReceived?.Invoke(conn.Peer, message);
+            if (message == null) return;
+            if (frameType == Protocol.FrameTypeAdmin)
+                AdminReceived?.Invoke(conn.Peer, System.Text.Encoding.UTF8.GetString(message));
+            else
+                MessageReceived?.Invoke(conn.Peer, message);
         }
         catch (Exception ex)
         {
@@ -181,6 +191,12 @@ public sealed class WinRtCentralTransport : IBleTransport
     }
 
     public async Task SendAsync(BlePeer peer, byte[] data)
+        => await SendFramedAsync(peer, data, Protocol.FrameTypeData);
+
+    public async Task SendAdminAsync(BlePeer peer, string json)
+        => await SendFramedAsync(peer, System.Text.Encoding.UTF8.GetBytes(json), Protocol.FrameTypeAdmin);
+
+    private async Task SendFramedAsync(BlePeer peer, byte[] data, byte frameType)
     {
         Connection? conn;
         lock (_lock) _connections.TryGetValue(peer.BluetoothAddress, out conn);
@@ -189,7 +205,7 @@ public sealed class WinRtCentralTransport : IBleTransport
         ushort msgId = conn.NextMsgId++;
         // Conservative chunk payload for the 20-byte ATT fallback is 11; use a
         // safe 180 here (negotiated MTU is typically higher). Keep <= 244.
-        var chunks = BleFraming.Split(data, msgId, 180);
+        var chunks = BleFraming.Split(data, msgId, 180, frameType);
         foreach (var chunk in chunks)
         {
             using var writer = new DataWriter();

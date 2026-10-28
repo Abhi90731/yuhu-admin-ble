@@ -15,6 +15,13 @@
     <RootNamespace>YuhuAdminBle</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Ed25519 signing (admin challenge), interop with Android BouncyCastle. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+    <!-- DPAPI for at-rest admin key protection on Windows. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
   <!--
     The test project lives in ./tests with its own .csproj. Exclude it here so
     the app doesn't try to compile the Xunit-based test sources (which would

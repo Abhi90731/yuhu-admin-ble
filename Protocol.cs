@@ -44,4 +44,23 @@ public static class Protocol
     // ---- Keepalive timing (TRANSPORT-BLE.md §7) ----
     public const int KeepaliveIntervalMs = 2000;
     public const int LinkTimeoutMs = 6000;
+
+    /// <summary>
+    /// Derive the 16-hex logical id from an advertisement "&lt;base64 pubkey&gt;|&lt;name&gt;"
+    /// per TRANSPORT-BLE.md §3.3: hex(SHA-256(raw_32_byte_pubkey))[0..16). Returns
+    /// null if the advert is malformed or the key is not 32 bytes.
+    /// </summary>
+    public static string? LogicalIdFromAdvertisement(string advertisement)
+    {
+        if (string.IsNullOrEmpty(advertisement)) return null;
+        var pubB64 = advertisement.Contains('|')
+            ? advertisement[..advertisement.IndexOf('|')]
+            : advertisement;
+        byte[] pub;
+        try { pub = Convert.FromBase64String(pubB64.Trim()); }
+        catch { return null; }
+        if (pub.Length != 32) return null;
+        var hash = System.Security.Cryptography.SHA256.HashData(pub);
+        return Convert.ToHexString(hash).ToLowerInvariant()[..16];
+    }
 }
