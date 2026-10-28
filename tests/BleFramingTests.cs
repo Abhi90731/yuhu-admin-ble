@@ -91,4 +91,25 @@ public class BleFramingTests
         Assert.Equal(Protocol.FrameTypePing, frameType);
         Assert.Null(message);
     }
+
+    [Fact]
+    public void AdminFrame_RoundTrips_AndReportsAdminType()
+    {
+        var envelope = """{"t":"LOG_TAIL","tag":"MeshFlow","lines":200}"""u8.ToArray();
+        var chunks = BleFraming.Split(envelope, 3, 180, Protocol.FrameTypeAdmin);
+
+        var reasm = new BleFraming.Reassembler();
+        byte[]? result = null;
+        byte seenType = 0xFF;
+        foreach (var c in chunks)
+        {
+            var (ft, m) = reasm.Accept(c);
+            seenType = ft;
+            if (m != null) result = m;
+        }
+
+        Assert.Equal(Protocol.FrameTypeAdmin, seenType);
+        Assert.NotNull(result);
+        Assert.Equal(envelope, result);
+    }
 }

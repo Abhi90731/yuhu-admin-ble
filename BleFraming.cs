@@ -11,9 +11,12 @@ namespace YuhuAdminBle;
 public static class BleFraming
 {
     /// <summary>
-    /// Split a whole message into DATA chunks sized to chunkPayload bytes each.
+    /// Split a whole message into chunks of a given frame type, sized to
+    /// chunkPayload bytes each. Defaults to DATA; pass FrameTypeAdmin for the
+    /// A.3 admin channel.
     /// </summary>
-    public static List<byte[]> Split(byte[] message, ushort msgId, int chunkPayload)
+    public static List<byte[]> Split(byte[] message, ushort msgId, int chunkPayload,
+        byte frameType = Protocol.FrameTypeData)
     {
         if (chunkPayload < 1 || chunkPayload > Protocol.MaxChunkPayload)
             throw new ArgumentOutOfRangeException(nameof(chunkPayload));
@@ -31,7 +34,7 @@ public static class BleFraming
 
             var frame = new byte[Protocol.HeaderSize + len];
             frame[0] = Protocol.Version;
-            frame[1] = Protocol.FrameTypeData;
+            frame[1] = frameType;
             frame[2] = (byte)(msgId >> 8);
             frame[3] = (byte)(msgId & 0xFF);
             frame[4] = (byte)(i >> 8);

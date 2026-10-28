@@ -27,6 +27,7 @@ public static class Protocol
     public const byte FrameTypeData = 0x00;
     public const byte FrameTypePing = 0x01;
     public const byte FrameTypeIdentity = 0x02;
+    public const byte FrameTypeAdmin = 0x03; // A.3: admin control envelope (JSON), chunked like DATA
     public const int HeaderSize = 9;
     public const int MaxChunkPayload = 255;
 
