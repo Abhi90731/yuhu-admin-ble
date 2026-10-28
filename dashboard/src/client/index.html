@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YUHU Mesh Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>YUHU Mesh Dashboard</h1>
+    <div class="status">
+      <span id="ws-status" class="badge badge-off">connecting…</span>
+      <span id="admin-status" class="badge"></span>
+      <button id="discover-btn" class="hidden">Discover (ping sweep)</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" id="devices-panel">
+      <h2>Devices <span class="count" id="device-count">0</span></h2>
+      <div id="devices"></div>
+    </section>
+
+    <section class="panel" id="health-panel">
+      <h2>Connection Health</h2>
+      <div id="health"></div>
+    </section>
+
+    <section class="panel span-2" id="graph-panel">
+      <h2>Mesh Graph</h2>
+      <svg id="graph" viewBox="0 0 800 360" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <span><i class="edge-p2p"></i> On P2P</span>
+        <span><i class="edge-mesh"></i> On Mesh</span>
+        <span><i class="node-dot"></i> device</span>
+      </div>
+    </section>
+
+    <section class="panel span-2" id="exceptions-panel">
+      <h2>Exceptions <span class="count count-alert" id="exception-count">0</span></h2>
+      <div id="exceptions"><div class="empty">No exceptions reported.</div></div>
+    </section>
+
+    <section class="panel span-2" id="ble-admin-panel">
+      <h2>BLE Admin (cable-free)
+        <span id="sidecar-status" class="badge badge-off">sidecar offline</span>
+      </h2>
+      <div class="ble-peers" id="ble-peers"><div class="empty">No BLE devices discovered. Start the C# sidecar (dotnet run --bridge).</div></div>
+      <div class="ble-controls" id="ble-controls">
+        <span id="ble-conn-state" class="pill pill-unknown">not connected</span>
+        <button class="btn-small" data-ble="state" disabled>State (failures)</button>
+        <button class="btn-small" data-ble="detail" disabled>Detail 5m</button>
+        <button class="btn-small" data-ble="exc" disabled>Exceptions</button>
+        <button class="btn-small" data-ble="live-on" disabled>Live ▶</button>
+        <button class="btn-small" data-ble="live-off" disabled>Live ■</button>
+        <button class="btn-small" data-ble="sys-on" disabled>System ▶</button>
+        <button class="btn-small" data-ble="sys-off" disabled>System ■</button>
+        <button class="btn-small" data-ble="clear">Clear</button>
+      </div>
+      <div id="ble-logs"></div>
+    </section>
+
+    <section class="panel span-2" id="timeline-panel">
+      <h2>Message-Flow Timeline</h2>
+      <div class="filters">
+        <label><input type="checkbox" id="live-toggle" checked /> live</label>
+        <select id="device-filter"><option value="">all devices</option></select>
+      </div>
+      <div id="timeline"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

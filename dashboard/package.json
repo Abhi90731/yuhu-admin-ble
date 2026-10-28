@@ -1,0 +1,24 @@
+{
+  "name": "yuhu-dashboard",
+  "version": "0.1.0",
+  "description": "Local real-time dashboard + admin control plane for the YUHU BLE mesh. Reads adb logcat, discovers mesh devices, streams live logs, and surfaces device-reported exceptions.",
+  "type": "module",
+  "main": "src/server/index.js",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "node --watch src/server/index.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "yuhu",
+    "mesh",
+    "ble",
+    "adb",
+    "dashboard"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}

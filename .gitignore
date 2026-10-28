@@ -16,3 +16,5 @@ tools/node_modules/
 .yuhu-secrets/
 admin-identity/
 *.dpapi
+dashboard/node_modules/
+dashboard/*.log

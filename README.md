@@ -1,4 +1,65 @@
-# YUHU Admin BLE — A.3.0 (Windows central spike)
+# YUHU Admin BLE + Dashboard (unified)
+
+This repo contains the **Windows BLE admin tooling** for the YUHU mesh, in two
+parts that work together:
+
+| Folder | What | Language | Runs |
+|--------|------|----------|------|
+| (root) | BLE admin **sidecar** — scans/connects to phones over custom BLE, authenticates as the super-user admin, pulls logs | C# / WinRT | Windows |
+| `dashboard/` | Browser **dashboard UI** — adb logs + the BLE admin panel (buttons, no console typing) | Node + JS | Windows/macOS |
+| `tools/` | Offline cert minting (root key + admin certs) | Node | secure/offline |
+
+## The full picture
+
+```
+Browser Dashboard UI  (dashboard/, http://localhost:4317)
+     ↕ WebSocket
+Node dashboard server ──ws://127.0.0.1:4318──► C# BLE sidecar (root, --bridge)
+     ↕ adb                                           ↕ custom BLE
+  cabled phones                                  admin-enabled phones
+```
+
+The dashboard shows **two** log sources in one UI:
+- **adb logs** from cabled / wifi-adb devices (always works)
+- **BLE admin logs** pulled cable-free from admin-enabled phones (via the sidecar)
+
+## Run it on Windows (two terminals)
+
+**Terminal 1 — the BLE sidecar (headless):**
+```powershell
+cd yuhu-admin-ble
+dotnet run -- --bridge
+```
+(First run without `--bridge` once, to generate the admin key + place the cert —
+see "Admin setup" below.)
+
+**Terminal 2 — the dashboard UI:**
+```powershell
+cd yuhu-admin-ble\dashboard
+npm install
+npm start
+```
+Open <http://localhost:4317>. The **BLE Admin** panel shows discovered phones;
+click **connect**, then use **State / Detail / Exceptions / Live / System**
+buttons — no typing.
+
+## Admin setup (one-time)
+
+1. `dotnet run` (no `--bridge`) → prints the admin public key, errors for a cert.
+2. Mint a cert offline: `node tools/mint-admin-cert.js --rootPriv <root-private.key> --adminPub <printed key> --out admin-identity/admin-cert.json`
+   (or mint on another machine and copy the JSON into `admin-identity/`).
+3. Re-run — `[admin] identity loaded; cert present.`
+
+## Standalone console mode
+
+The sidecar also runs as an interactive console (without `--bridge`) for
+debugging: `dotnet run` → connect by index → `state` / `detail [min]` / `exc` /
+`live` / `sys`.
+
+---
+
+# A.3.0 — Windows central BLE spike (original notes)
+
 
 A minimal **Windows** console app that proves the laptop can talk to a YUHU
 phone over the **custom BLE** protocol as a **BLE central** (laptop scans and
