@@ -66,7 +66,7 @@ bool StartAuth(BlePeer peer)
     if (string.IsNullOrEmpty(phoneId)) { Console.WriteLine("[admin] unknown phone logical id; cannot bind proof"); return false; }
 
     admin = new AdminClient(identity, phoneId, json => _ = transport.SendAdminAsync(peer, json));
-    admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (type 'state', 'detail [min]', or 'live')\n");
+    admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (state | detail [min] | exc | live | sys)\n");
     admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
     admin.LogBatch += lines =>
     {
@@ -74,6 +74,7 @@ bool StartAuth(BlePeer peer)
         foreach (var l in lines) Console.WriteLine("  " + l);
     };
     admin.LiveLine += l => Console.WriteLine("[live] " + l);
+    admin.SystemLine += l => Console.WriteLine("[sys] " + l);
     admin.Start();
     Console.WriteLine("[admin] ADMIN_HELLO sent (auto)…");
     return true;
@@ -96,7 +97,9 @@ Console.WriteLine("  <number>      connect to device by index (auto-authenticate
 Console.WriteLine("  r             rescan list");
 Console.WriteLine("  state         pull STATE logs (major issues / failures)");
 Console.WriteLine("  detail [min]  pull DETAIL logs for last min minutes (1/5/20, default 5)");
-Console.WriteLine("  live / stop   start / stop continuous live streaming");
+Console.WriteLine("  exc           pull EXCEPTIONS (crashes + stack traces)");
+Console.WriteLine("  live / stop   start / stop continuous DETAIL streaming");
+Console.WriteLine("  sys / sysstop start / stop full-logcat SYSTEM streaming (with timestamps)");
 Console.WriteLine("  q             quit\n");
 
 while (true)
@@ -146,6 +149,25 @@ while (true)
     {
         admin?.SetLiveLogs(false);
         Console.WriteLine("[admin] live streaming OFF");
+        continue;
+    }
+    if (line is "exc")
+    {
+        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated"); continue; }
+        admin.RequestExceptions();
+        continue;
+    }
+    if (line is "sys")
+    {
+        if (admin?.Current != AdminClient.State.Authed) { Console.WriteLine("[admin] not authenticated"); continue; }
+        admin.SetSystemLogs(true);
+        Console.WriteLine("[admin] SYSTEM (full logcat) streaming ON");
+        continue;
+    }
+    if (line is "sysstop")
+    {
+        admin?.SetSystemLogs(false);
+        Console.WriteLine("[admin] SYSTEM streaming OFF");
         continue;
     }
     if (int.TryParse(line, out var idx) && idx >= 0 && idx < discovered.Count)

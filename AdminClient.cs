@@ -35,6 +35,8 @@ public sealed class AdminClient
     public event Action<IReadOnlyList<string>>? LogBatch;
     /// <summary>Raised for each live log line.</summary>
     public event Action<string>? LiveLine;
+    /// <summary>Raised for each full-logcat SYSTEM line (with timestamp).</summary>
+    public event Action<string>? SystemLine;
     /// <summary>Raised on handshake failure.</summary>
     public event Action<string>? Failed_;
 
@@ -109,6 +111,10 @@ public sealed class AdminClient
                 if (o.TryGetProperty("line", out var line))
                     LiveLine?.Invoke(line.GetString() ?? "");
                 break;
+            case "SYS":
+                if (o.TryGetProperty("line", out var sysLine))
+                    SystemLine?.Invoke(sysLine.GetString() ?? "");
+                break;
             case "PONG":
                 // liveness ack — no-op here
                 break;
@@ -166,6 +172,20 @@ public sealed class AdminClient
     {
         RequireAuth();
         _send(JsonSerializer.Serialize(new Dictionary<string, object> { ["t"] = "LOG_LIVE", ["on"] = on }));
+    }
+
+    /// <summary>EXCEPTIONS tier: crashes + caught exceptions with stack traces.</summary>
+    public void RequestExceptions()
+    {
+        RequireAuth();
+        _send(JsonSerializer.Serialize(new Dictionary<string, object> { ["t"] = "LOG_EXCEPTIONS" }));
+    }
+
+    /// <summary>SYSTEM: full-logcat live stream (system/framework, with timestamps).</summary>
+    public void SetSystemLogs(bool on)
+    {
+        RequireAuth();
+        _send(JsonSerializer.Serialize(new Dictionary<string, object> { ["t"] = "LOG_SYSTEM", ["on"] = on }));
     }
 
     public void Ping()
