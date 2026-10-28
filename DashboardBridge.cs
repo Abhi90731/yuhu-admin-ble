@@ -65,19 +65,29 @@ public sealed class DashboardBridge
         listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
         listener.Start();
         Console.WriteLine($"[bridge] dashboard WebSocket on ws://127.0.0.1:{_port}/");
+        Console.WriteLine("[bridge] press Ctrl+C to stop.");
         await _transport.StartScanAsync();
+
+        // Stopping the listener unblocks the pending GetContextAsync so Ctrl+C
+        // (which cancels ct) actually shuts us down.
+        using var reg = ct.Register(() =>
+        {
+            try { listener.Stop(); } catch { }
+        });
 
         while (!ct.IsCancellationRequested)
         {
             HttpListenerContext ctx;
             try { ctx = await listener.GetContextAsync(); }
-            catch { break; }
+            catch { break; } // listener stopped (shutdown) or error
 
             if (ctx.Request.IsWebSocketRequest)
                 _ = HandleClientAsync(ctx);
             else { ctx.Response.StatusCode = 400; ctx.Response.Close(); }
         }
-        listener.Stop();
+        try { listener.Close(); } catch { }
+        _peerRefresh.Dispose();
+        Console.WriteLine("[bridge] stopped.");
     }
 
     private async Task HandleClientAsync(HttpListenerContext ctx)
