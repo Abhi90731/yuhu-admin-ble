@@ -101,10 +101,26 @@ public sealed class WinRtCentralTransport : IBleTransport
             return false;
         }
 
-        var servicesResult = await device.GetGattServicesForUuidAsync(Protocol.ServiceUuid);
-        if (servicesResult.Status != GattCommunicationStatus.Success || servicesResult.Services.Count == 0)
+        // Force an UNCACHED service read. Windows aggressively caches GATT
+        // services; after a disconnect the cache can return stale/empty handles,
+        // which showed up as "missing TX/RX" on reconnect. Uncached + a short
+        // retry makes reconnect reliable.
+        GattDeviceServicesResult? servicesResult = null;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            Console.WriteLine($"[connect] service not found: {servicesResult.Status}");
+            servicesResult = await device.GetGattServicesForUuidAsync(
+                Protocol.ServiceUuid, BluetoothCacheMode.Uncached);
+            if (servicesResult.Status == GattCommunicationStatus.Success &&
+                servicesResult.Services.Count > 0)
+                break;
+            await Task.Delay(300);
+        }
+
+        if (servicesResult == null ||
+            servicesResult.Status != GattCommunicationStatus.Success ||
+            servicesResult.Services.Count == 0)
+        {
+            Console.WriteLine($"[connect] service not found: {servicesResult?.Status}");
             device.Dispose();
             return false;
         }
@@ -165,7 +181,7 @@ public sealed class WinRtCentralTransport : IBleTransport
 
     private static async Task<GattCharacteristic?> ResolveChar(GattDeviceService service, Guid uuid)
     {
-        var res = await service.GetCharacteristicsForUuidAsync(uuid);
+        var res = await service.GetCharacteristicsForUuidAsync(uuid, BluetoothCacheMode.Uncached);
         return res.Status == GattCommunicationStatus.Success && res.Characteristics.Count > 0
             ? res.Characteristics[0]
             : null;

@@ -57,6 +57,39 @@ BlePeer? adminPeer = null;
 
 transport.AdminReceived += (peer, json) => admin?.OnEnvelope(json);
 
+// Build an AdminClient for a connected peer and start the handshake.
+// Returns false if prerequisites (identity/cert, phone id) are missing.
+bool StartAuth(BlePeer peer)
+{
+    if (identity == null) { Console.WriteLine("[admin] no identity/cert loaded"); return false; }
+    var phoneId = peer.LogicalId;
+    if (string.IsNullOrEmpty(phoneId)) { Console.WriteLine("[admin] unknown phone logical id; cannot bind proof"); return false; }
+
+    admin = new AdminClient(identity, phoneId, json => _ = transport.SendAdminAsync(peer, json));
+    admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED  (type 'logs' or 'live')\n");
+    admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
+    admin.LogBatch += lines =>
+    {
+        Console.WriteLine($"--- LOG ({lines.Count} lines) ---");
+        foreach (var l in lines) Console.WriteLine("  " + l);
+    };
+    admin.LiveLine += l => Console.WriteLine("[live] " + l);
+    admin.Start();
+    Console.WriteLine("[admin] ADMIN_HELLO sent (auto)…");
+    return true;
+}
+
+// AUTO-AUTH: the keepalive window is only ~6s — too tight to type `auth` by
+// hand. So kick off the handshake automatically the moment a peer connects
+// (its identity, hence logical id, is already resolved by then). The handshake
+// traffic itself keeps the link alive.
+transport.PeerConnected += peer =>
+{
+    adminPeer = peer;
+    if (identity != null && !string.IsNullOrEmpty(peer.LogicalId))
+        StartAuth(peer);
+};
+
 await transport.StartScanAsync();
 Console.WriteLine("Scanning… commands:");
 Console.WriteLine("  <number>      connect to device by index");
@@ -84,22 +117,8 @@ while (true)
     }
     if (line.StartsWith("auth"))
     {
-        if (identity == null) { Console.WriteLine("[admin] no identity/cert loaded"); continue; }
         if (adminPeer == null) { Console.WriteLine("[admin] connect to a peer first"); continue; }
-        var phoneId = adminPeer.LogicalId; // derived from the Identity read on connect
-        if (string.IsNullOrEmpty(phoneId)) { Console.WriteLine("[admin] unknown phone logical id (identity read failed); cannot bind proof"); continue; }
-
-        admin = new AdminClient(identity, phoneId, json => _ = transport.SendAdminAsync(adminPeer!, json));
-        admin.Authenticated += () => Console.WriteLine("\n>>> ADMIN AUTHENTICATED\n");
-        admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
-        admin.LogBatch += lines =>
-        {
-            Console.WriteLine($"--- LOG ({lines.Count} lines) ---");
-            foreach (var l in lines) Console.WriteLine("  " + l);
-        };
-        admin.LiveLine += l => Console.WriteLine("[live] " + l);
-        admin.Start();
-        Console.WriteLine("[admin] ADMIN_HELLO sent…");
+        StartAuth(adminPeer);
         continue;
     }
     if (line.StartsWith("logs"))
