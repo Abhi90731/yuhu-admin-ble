@@ -3,73 +3,108 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YUHU Mesh Dashboard</title>
+  <title>YUHU Mesh Admin</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>
-    <h1>YUHU Mesh Dashboard</h1>
-    <div class="status">
-      <span id="ws-status" class="badge badge-off">connecting…</span>
-      <span id="admin-status" class="badge"></span>
-      <button id="discover-btn" class="hidden">Discover (ping sweep)</button>
-    </div>
-  </header>
+  <!-- ===== Login gate ===== -->
+  <div id="login" class="login-overlay">
+    <form id="login-form" class="login-box">
+      <h1>YUHU Mesh Admin</h1>
+      <p class="login-sub">Sign in to continue</p>
+      <input id="login-user" type="text" placeholder="Username" autocomplete="username" />
+      <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" />
+      <button type="submit">Sign in</button>
+      <div id="login-error" class="login-error"></div>
+    </form>
+  </div>
 
-  <main>
-    <section class="panel" id="devices-panel">
-      <h2>Devices <span class="count" id="device-count">0</span></h2>
-      <div id="devices"></div>
-    </section>
-
-    <section class="panel" id="health-panel">
-      <h2>Connection Health</h2>
-      <div id="health"></div>
-    </section>
-
-    <section class="panel span-2" id="graph-panel">
-      <h2>Mesh Graph</h2>
-      <svg id="graph" viewBox="0 0 800 360" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="legend">
-        <span><i class="edge-p2p"></i> On P2P</span>
-        <span><i class="edge-mesh"></i> On Mesh</span>
-        <span><i class="node-dot"></i> device</span>
+  <!-- ===== App shell (hidden until login) ===== -->
+  <div id="app" class="app hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-head">
+        <span class="logo">YUHU</span>
+        <button id="sidebar-toggle" class="icon-btn" title="Collapse">&#9776;</button>
       </div>
-    </section>
-
-    <section class="panel span-2" id="exceptions-panel">
-      <h2>Exceptions <span class="count count-alert" id="exception-count">0</span></h2>
-      <div id="exceptions"><div class="empty">No exceptions reported.</div></div>
-    </section>
-
-    <section class="panel span-2" id="ble-admin-panel">
-      <h2>BLE Admin (cable-free)
+      <nav class="nav">
+        <button class="nav-item active" data-tab="dashboard"><span class="nav-ico">▦</span><span class="nav-label">Dashboard</span></button>
+        <button class="nav-item" data-tab="analytics"><span class="nav-ico">▧</span><span class="nav-label">Analytics</span></button>
+        <button class="nav-item" data-tab="logs"><span class="nav-ico">≣</span><span class="nav-label">Logs</span></button>
+      </nav>
+      <div class="sidebar-foot">
         <span id="sidecar-status" class="badge badge-off">sidecar offline</span>
-      </h2>
-      <div class="ble-peers" id="ble-peers"><div class="empty">No BLE devices discovered. Start the C# sidecar (dotnet run --bridge).</div></div>
-      <div class="ble-controls" id="ble-controls">
-        <span id="ble-conn-state" class="pill pill-unknown">not connected</span>
-        <button class="btn-small" data-ble="state" disabled>State (failures)</button>
-        <button class="btn-small" data-ble="detail" disabled>Detail 5m</button>
-        <button class="btn-small" data-ble="exc" disabled>Exceptions</button>
-        <button class="btn-small" data-ble="live-on" disabled>Live ▶</button>
-        <button class="btn-small" data-ble="live-off" disabled>Live ■</button>
-        <button class="btn-small" data-ble="sys-on" disabled>System ▶</button>
-        <button class="btn-small" data-ble="sys-off" disabled>System ■</button>
-        <button class="btn-small" data-ble="clear">Clear</button>
+        <button id="logout-btn" class="icon-btn" title="Log out">⎋</button>
       </div>
-      <div id="ble-logs"></div>
-    </section>
+    </aside>
 
-    <section class="panel span-2" id="timeline-panel">
-      <h2>Message-Flow Timeline</h2>
-      <div class="filters">
-        <label><input type="checkbox" id="live-toggle" checked /> live</label>
-        <select id="device-filter"><option value="">all devices</option></select>
-      </div>
-      <div id="timeline"></div>
-    </section>
-  </main>
+    <main class="content">
+      <!-- ===== TAB 1: Dashboard ===== -->
+      <section class="tab active" id="tab-dashboard">
+        <header class="tab-head"><h2>Dashboard</h2>
+          <span id="ws-status" class="badge badge-off">connecting…</span>
+        </header>
+
+        <div class="card">
+          <h3>YUHU Devices in range</h3>
+          <div id="ble-peers" class="device-grid"><div class="empty">Scanning for devices… (start the sidecar: <code>dotnet run -- --bridge</code>)</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Connection</h3>
+          <div id="conn-bar" class="conn-bar">
+            <span id="conn-state" class="pill pill-unknown">not connected</span>
+            <button id="disconnect-btn" class="btn danger hidden">Disconnect</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Message-Flow Timeline <span class="muted">(from BLE logs)</span></h3>
+          <div id="timeline" class="timeline"><div class="empty">No message-flow events yet. Connect to a device.</div></div>
+        </div>
+      </section>
+
+      <!-- ===== TAB 2: Analytics ===== -->
+      <section class="tab" id="tab-analytics">
+        <header class="tab-head"><h2>Analytics</h2></header>
+
+        <div class="card">
+          <h3>Mesh operations <span class="muted">(counts from logs)</span></h3>
+          <div id="ops-chart" class="chart"></div>
+          <div class="muted small">Click a bar to see which devices performed it and when.</div>
+        </div>
+
+        <div class="card" id="ops-drill-card">
+          <h3 id="ops-drill-title">Operation detail</h3>
+          <div id="ops-drill" class="drill"><div class="empty">Click an operation above.</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Exceptions &amp; errors</h3>
+          <div id="exc-summary" class="exc-summary"></div>
+          <div id="exc-list" class="exc-list"><div class="empty">No exceptions reported.</div></div>
+        </div>
+      </section>
+
+      <!-- ===== TAB 3: Logs ===== -->
+      <section class="tab" id="tab-logs">
+        <header class="tab-head"><h2>Logs</h2></header>
+        <div class="card">
+          <div class="log-switcher" id="log-switcher">
+            <button class="seg active" data-log="state">State (failures)</button>
+            <button class="seg" data-log="detail">Detail</button>
+            <button class="seg" data-log="live">Live</button>
+            <button class="seg" data-log="system">System</button>
+            <button class="seg" data-log="exceptions">Exceptions</button>
+            <span class="log-actions">
+              <button id="log-refresh" class="btn-small">Refresh</button>
+              <button id="log-clear" class="btn-small">Clear</button>
+            </span>
+          </div>
+          <div id="log-view" class="log-view"><div class="empty">Connect to a device and pick a log type.</div></div>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>

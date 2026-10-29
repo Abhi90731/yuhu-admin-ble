@@ -146,6 +146,9 @@ public sealed class DashboardBridge
             case "system":
                 _admin?.SetSystemLogs(o.TryGetProperty("on", out var s) && s.GetBoolean());
                 break;
+            case "disconnect":
+                if (_adminPeer != null) _ = _transport.DisconnectAsync(_adminPeer);
+                break;
         }
     }
 
@@ -183,7 +186,7 @@ public sealed class DashboardBridge
             });
         };
         _admin.Failed_ += r => Broadcast(new { ev = "status", text = $"auth failed: {r}" });
-        _admin.LogBatch += lines => Broadcast(new { ev = "log", tier = "batch", lines });
+        _admin.LogBatch += (tier, lines, done) => Broadcast(new { ev = "log", tier, lines, done });
         _admin.LiveLine += line => Broadcast(new { ev = "live", line });
         _admin.SystemLine += line => Broadcast(new { ev = "sys", line });
         _admin.Start();

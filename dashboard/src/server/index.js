@@ -23,6 +23,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4317);
 const ADMIN_ENABLED = process.env.YUHU_ADMIN === '1' || process.env.YUHU_ADMIN === 'true';
 
+// Dashboard login gate (just keeps the UI from being wide open; separate from
+// the BLE admin cert trust). Override via env; defaults to admin/admin.
+const UI_USER = process.env.YUHU_UI_USER || 'admin';
+const UI_PASS = process.env.YUHU_UI_PASS || 'admin';
+
 const app = express();
 app.use(express.json());
 app.use(express.static(join(__dirname, '..', 'client')));
@@ -47,6 +52,12 @@ const deviceManager = new DeviceManager(state, broadcast);
 const bleBridge = new BleBridge(broadcast);
 
 // ---- REST API ----
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (username === UI_USER && password === UI_PASS) res.json({ ok: true });
+  else res.status(401).json({ ok: false, error: 'invalid credentials' });
+});
+
 app.get('/api/config', (_req, res) => {
   res.json({ adminEnabled: ADMIN_ENABLED, adbPath, port: PORT });
 });

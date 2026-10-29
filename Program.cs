@@ -93,10 +93,10 @@ bool StartAuth(BlePeer peer)
         try { admin!.RequestState(); admin!.RequestDetail(5); } catch { }
     };
     admin.Failed_ += r => Console.WriteLine($"[admin] handshake failed: {r}");
-    admin.LogBatch += lines =>
+    admin.LogBatch += (tier, lines, done) =>
     {
-        Console.WriteLine($"--- LOG ({lines.Count} lines) ---");
-        foreach (var l in lines) Console.WriteLine("  " + l);
+        foreach (var l in lines) Console.WriteLine($"  [{tier}] " + l);
+        if (done) Console.WriteLine($"--- end {tier} ---");
     };
     admin.LiveLine += l => Console.WriteLine("[live] " + l);
     admin.SystemLine += l => Console.WriteLine("[sys] " + l);

@@ -59,4 +59,7 @@ public interface IBleTransport : IAsyncDisposable
 
     /// <summary>Send an admin JSON envelope to a connected peer (0x03 frames).</summary>
     Task SendAdminAsync(BlePeer peer, string json);
+
+    /// <summary>Proactively disconnect a connected peer.</summary>
+    Task DisconnectAsync(BlePeer peer);
 }

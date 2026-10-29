@@ -31,8 +31,8 @@ public sealed class AdminClient
 
     /// <summary>Raised when the link is authenticated (ADMIN_OK received).</summary>
     public event Action? Authenticated;
-    /// <summary>Raised for each batch of tailed log lines.</summary>
-    public event Action<IReadOnlyList<string>>? LogBatch;
+    /// <summary>Raised for each batch of log lines (tier, lines, done).</summary>
+    public event Action<string, IReadOnlyList<string>, bool>? LogBatch;
     /// <summary>Raised for each live log line.</summary>
     public event Action<string>? LiveLine;
     /// <summary>Raised for each full-logcat SYSTEM line (with timestamp).</summary>
@@ -105,7 +105,11 @@ public sealed class AdminClient
                 break;
             case "LOG":
                 if (o.TryGetProperty("lines", out var lines) && lines.ValueKind == JsonValueKind.Array)
-                    LogBatch?.Invoke(lines.EnumerateArray().Select(e => e.GetString() ?? "").ToList());
+                {
+                    var tier = o.TryGetProperty("tier", out var tEl2) ? tEl2.GetString() ?? "detail" : "detail";
+                    var done = !o.TryGetProperty("done", out var dEl) || dEl.GetBoolean();
+                    LogBatch?.Invoke(tier, lines.EnumerateArray().Select(e => e.GetString() ?? "").ToList(), done);
+                }
                 break;
             case "LIVE":
                 if (o.TryGetProperty("line", out var line))

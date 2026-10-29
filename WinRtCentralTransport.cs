@@ -285,6 +285,14 @@ public sealed class WinRtCentralTransport : IBleTransport
         }
     }
 
+    public Task DisconnectAsync(BlePeer peer)
+    {
+        Connection? conn;
+        lock (_lock) _connections.TryGetValue(peer.BluetoothAddress, out conn);
+        if (conn != null) HandleDisconnect(conn, "user-requested");
+        return Task.CompletedTask;
+    }
+
     private void HandleDisconnect(Connection conn, string reason)
     {
         lock (_lock)
